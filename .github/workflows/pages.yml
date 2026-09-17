@@ -1,0 +1,70 @@
+name: Deploy Dar Aqaria to GitHub Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "dar-aqaria-standalone.zip"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract website
+        run: |
+          mkdir -p site
+          unzip -q dar-aqaria-standalone.zip -d site
+
+          echo "=== Extracted files ==="
+          find site -maxdepth 3 -type f | sort
+
+      - name: Detect website root
+        id: root
+        shell: bash
+        run: |
+          if [ -f "site/index.html" ]; then
+            echo "dir=site" >> "$GITHUB_OUTPUT"
+          else
+            INDEX_FILE=$(find site -name "index.html" -type f | head -n 1)
+
+            if [ -z "$INDEX_FILE" ]; then
+              echo "ERROR: index.html was not found inside ZIP."
+              exit 1
+            fi
+
+            WEBSITE_DIR=$(dirname "$INDEX_FILE")
+            echo "Website root: $WEBSITE_DIR"
+            echo "dir=$WEBSITE_DIR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.root.outputs.dir }}
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
